@@ -3,8 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Finance Tracker</title>
+  <title>SammiReddy Finance Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
+
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- jsPDF AutoTable plugin -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
   <style>
     :root {
@@ -12,529 +19,871 @@
       --surface: #1a1a1a;
       --border: #2a2a2a;
       --text: #e8e8e8;
-      --muted: #666;
+      --muted: #555;
       --credit: #4ade80;
       --debit: #f87171;
       --accent: #facc15;
     }
 
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       background: var(--bg);
       color: var(--text);
       font-family: 'DM Mono', monospace;
       min-height: 100vh;
-      padding: 40px 20px;
+      padding: 32px 20px;
     }
 
-    .container {
-      max-width: 760px;
-      margin: 0 auto;
+    .container { max-width: 860px; margin: 0 auto; }
+
+    /* ── HEADER ── */
+    header { margin-bottom: 24px; }
+    header h1 { font-family: 'Syne', sans-serif; font-size: 1.9rem; font-weight: 800; letter-spacing: -1px; }
+    header p  { color: var(--muted); font-size: 0.76rem; margin-top: 4px; }
+
+    /* ── TABS ── */
+    .tabs-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
     }
 
-    header { margin-bottom: 40px; }
-
-    header h1 {
-      font-family: 'Syne', sans-serif;
-      font-size: 2.4rem;
-      font-weight: 800;
-      letter-spacing: -1px;
-      line-height: 1;
+    .tab-summary {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--muted); cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 0.8rem;
+      padding: 7px 14px; transition: all 0.15s; white-space: nowrap;
     }
+    .tab-summary:hover { border-color: var(--accent); color: var(--text); }
+    .tab-summary.active { border-color: var(--accent); color: var(--accent); background: #1f1d0f; }
 
-    header p {
-      color: var(--muted);
-      font-size: 0.8rem;
-      margin-top: 6px;
+    .tab {
+      display: flex; align-items: center; gap: 4px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--muted); cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 0.8rem;
+      padding: 7px 10px 7px 14px; transition: all 0.15s; white-space: nowrap;
     }
+    .tab:hover { border-color: var(--accent); color: var(--text); }
+    .tab.active { border-color: var(--accent); color: var(--accent); background: #1f1d0f; }
 
-    /* ── SUMMARY CARDS ── */
-    .summary {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 32px;
+    .tab-actions { display: flex; align-items: center; gap: 2px; margin-left: 4px; opacity: 0; transition: opacity 0.15s; }
+    .tab:hover .tab-actions { opacity: 1; }
+    /* On touch/mobile always show actions since there's no hover */
+    @media (hover: none) { .tab-actions { opacity: 1; } }
+
+    .tab-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: none; color: var(--muted);
+      cursor: pointer; font-size: 0.78rem; padding: 3px 5px;
+      border-radius: 4px; line-height: 1;
+      transition: color 0.15s, background 0.15s;
+      /* make sure it's always clickable on top */
+      position: relative; z-index: 10;
+      -webkit-tap-highlight-color: transparent;
     }
+    .tab-icon:hover { background: var(--border); }
+    .tab-icon.rename:hover { color: var(--accent); }
+    .tab-icon.del:hover    { color: var(--debit);  }
+    .tab-icon.del          { color: #f87171aa; }
 
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 18px;
+    .btn-new-site {
+      background: transparent; border: 1px dashed var(--border);
+      border-radius: 8px; color: var(--muted); cursor: pointer;
+      font-family: 'DM Mono', monospace; font-size: 0.8rem;
+      padding: 7px 14px; transition: all 0.15s; white-space: nowrap;
     }
+    .btn-new-site:hover { border-color: var(--accent); color: var(--accent); }
 
-    .card .label {
-      font-size: 0.7rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 8px;
-    }
-
-    .card .amount {
-      font-size: 1.5rem;
-      font-weight: 500;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .card.credit .amount { color: var(--credit); }
-    .card.debit  .amount { color: var(--debit);  }
-    .card.balance .amount { color: var(--accent); }
+    /* ── CARDS (shared) ── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+    .card .label { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    .card .amount { font-size: 1.35rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .card.credit .amount  { color: var(--credit); }
+    .card.debit  .amount  { color: var(--debit);  }
+    .card.balance .amount { color: var(--accent);  }
     .card.balance.negative .amount { color: var(--debit); }
 
-    /* ── FORM ── */
-    /*
-      Now 4 columns: description, amount, type, date
-      Then a full-width Add button below
-    */
-    .form-grid {
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
+    /* ── SUMMARY PAGE ── */
+    .summary-page { display: none; }
+    .summary-page.visible { display: block; }
+    .summary-page h2 { font-family: 'Syne', sans-serif; font-size: 1.1rem; margin-bottom: 20px; }
 
-    .form-btn {
-      margin-bottom: 28px;
-    }
+    .overall-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; }
 
-    .form-btn button {
-      width: 100%;
+    .site-breakdown { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+    .site-breakdown thead th {
+      font-size: 0.66rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 1px; text-align: left; padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
     }
+    .site-breakdown tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    .site-breakdown tbody tr:hover { background: var(--surface); }
+    .site-breakdown tbody td { padding: 12px; font-size: 0.83rem; }
+    .go-arrow { color: var(--muted); font-size: 0.8rem; }
 
-    .field {
+    /* ── SITE PAGE ── */
+    .site-page { display: none; }
+    .site-page.visible { display: block; }
+
+    /* export buttons row */
+    .export-row {
       display: flex;
-      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn-export {
+      display: flex;
+      align-items: center;
       gap: 6px;
-    }
-
-    .field label {
-      font-size: 0.7rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    .field input, .field select {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--text);
+      cursor: pointer;
       font-family: 'DM Mono', monospace;
-      font-size: 0.9rem;
-      padding: 10px 12px;
-      outline: none;
-      transition: border-color 0.15s;
-      width: 100%;
+      font-size: 0.78rem;
+      padding: 8px 14px;
+      transition: all 0.15s;
+      white-space: nowrap;
     }
+    .btn-export:hover { opacity: 1; }
+    .btn-export.excel:hover { border-color: #22c55e; color: #22c55e; }
+    .btn-export.pdf:hover   { border-color: #f87171; color: #f87171; }
 
-    /* Style date input calendar icon to match dark theme */
-    .field input[type="date"]::-webkit-calendar-picker-indicator {
-      filter: invert(0.5);
-      cursor: pointer;
+    .site-summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+
+    /* ── FORM ── */
+    .form-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .form-btn  { margin-bottom: 20px; }
+    .form-btn button { width: 100%; }
+
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .field input, .field select {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-family: 'DM Mono', monospace; font-size: 0.86rem;
+      padding: 9px 12px; outline: none; transition: border-color 0.15s; width: 100%;
     }
-
-    .field input:focus, .field select:focus {
-      border-color: var(--accent);
-    }
-
+    .field input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.4); cursor: pointer; }
+    .field input:focus, .field select:focus { border-color: var(--accent); }
     .field select {
-      appearance: none;
-      cursor: pointer;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%23666'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 12px center;
-      padding-right: 32px;
+      appearance: none; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%23555'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
     }
 
     button {
-      background: var(--accent);
-      border: none;
-      border-radius: 8px;
-      color: #000;
-      cursor: pointer;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.85rem;
-      font-weight: 500;
-      padding: 10px 20px;
-      transition: opacity 0.15s, transform 0.1s;
-      white-space: nowrap;
+      background: var(--accent); border: none; border-radius: 8px;
+      color: #000; cursor: pointer; font-family: 'DM Mono', monospace;
+      font-size: 0.85rem; font-weight: 500; padding: 10px 20px;
+      transition: opacity 0.15s, transform 0.1s; white-space: nowrap;
     }
-
     button:hover  { opacity: 0.85; }
     button:active { transform: scale(0.97); }
 
-    /* ── TABLE HEADER ── */
-    .table-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
+    /* ── SEARCH ── */
+    .search-row { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
+    .search-input {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-family: 'DM Mono', monospace; font-size: 0.85rem;
+      padding: 8px 14px; outline: none; flex: 1; transition: border-color 0.15s;
     }
-
-    .table-header h2 {
-      font-family: 'Syne', sans-serif;
-      font-size: 1rem;
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--muted); }
+    .filter-select {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-family: 'DM Mono', monospace; font-size: 0.82rem;
+      padding: 8px 28px 8px 12px; outline: none; appearance: none; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%23555'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center;
+      transition: border-color 0.15s;
     }
-
-    .btn-ghost {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-size: 0.72rem;
-      padding: 5px 12px;
-    }
-
-    .btn-ghost:hover { border-color: var(--debit); color: var(--debit); opacity: 1; }
+    .filter-select:focus { border-color: var(--accent); }
 
     /* ── TABLE ── */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+    .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .table-header h2 { font-family: 'Syne', sans-serif; font-size: 0.95rem; }
 
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); font-size: 0.7rem; padding: 5px 12px;
+    }
+    .btn-ghost:hover { border-color: var(--debit); color: var(--debit); opacity: 1; }
+
+    table { width: 100%; border-collapse: collapse; }
     thead th {
-      font-size: 0.68rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      text-align: left;
-      padding: 8px 12px;
+      font-size: 0.64rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 1px; text-align: left; padding: 8px 12px;
       border-bottom: 1px solid var(--border);
     }
-
-    tbody tr {
-      border-bottom: 1px solid var(--border);
-      transition: background 0.1s;
-    }
-
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
     tbody tr:hover { background: var(--surface); }
+    tbody td { padding: 11px 12px; font-size: 0.82rem; vertical-align: middle; }
 
-    tbody td {
-      padding: 12px;
-      font-size: 0.85rem;
-      vertical-align: middle;
-    }
-
-    .date-cell {
-      color: var(--muted);
-      font-size: 0.75rem;
-      white-space: nowrap;
-    }
-
-    .badge {
-      display: inline-block;
-      border-radius: 4px;
-      font-size: 0.68rem;
-      padding: 2px 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
+    .date-cell { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+    .badge { display: inline-block; border-radius: 4px; font-size: 0.64rem; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.5px; }
     .badge.credit { background: #052e16; color: var(--credit); }
     .badge.debit  { background: #2d0a0a; color: var(--debit);  }
-
     .amount-cell { font-variant-numeric: tabular-nums; }
     .amount-cell.credit { color: var(--credit); }
     .amount-cell.debit  { color: var(--debit);  }
 
     .delete-btn {
-      background: transparent;
-      border: none;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 1rem;
-      opacity: 0;
-      padding: 4px 8px;
+      background: transparent; border: none; color: var(--muted);
+      cursor: pointer; font-size: 0.9rem; opacity: 0; padding: 4px 8px;
       transition: opacity 0.15s, color 0.15s;
     }
-
     tbody tr:hover .delete-btn { opacity: 1; }
     .delete-btn:hover { color: var(--debit); }
 
-    /* ── EMPTY STATE ── */
-    .empty {
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.82rem;
-      padding: 48px 0;
-    }
+    mark { background: #3d3000; color: var(--accent); border-radius: 2px; padding: 0 2px; }
 
+    .empty { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 48px 0; }
     .empty .icon { font-size: 2rem; margin-bottom: 10px; }
 
-    /* ── SAVE INDICATOR ── */
-    /*
-      A small toast that briefly appears when data is saved.
-      It fades in, stays for a moment, then fades out via CSS animation.
-    */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: var(--surface);
-      border: 1px solid var(--credit);
-      color: var(--credit);
-      font-size: 0.75rem;
-      padding: 10px 16px;
-      border-radius: 8px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s;
+    /* ── MODAL ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s;
     }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: #1a1a1a; border: 1px solid var(--border); border-radius: 12px;
+      padding: 28px; width: 100%; max-width: 360px;
+      transform: translateY(12px); transition: transform 0.2s;
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+    .modal h3 { font-family: 'Syne', sans-serif; font-size: 1.1rem; margin-bottom: 16px; }
+    .modal input {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.9rem;
+      padding: 10px 14px; outline: none; width: 100%; margin-bottom: 14px;
+      transition: border-color 0.15s;
+    }
+    .modal input:focus { border-color: var(--accent); }
+    .modal-btns { display: flex; gap: 10px; }
+    .modal-btns .btn-cancel {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--muted); flex: 1;
+    }
+    .modal-btns .btn-cancel:hover { border-color: var(--text); color: var(--text); opacity: 1; }
+    .modal-btns .btn-confirm { flex: 2; }
 
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface); border: 1px solid var(--credit);
+      color: var(--credit); font-size: 0.74rem; padding: 10px 16px;
+      border-radius: 8px; opacity: 0; pointer-events: none;
+      transition: opacity 0.3s; z-index: 200;
+    }
     .toast.show { opacity: 1; }
 
     /* ── RESPONSIVE ── */
-    @media (max-width: 600px) {
-      .summary    { grid-template-columns: 1fr; }
-      .form-grid  { grid-template-columns: 1fr 1fr; }
+    @media (max-width: 620px) {
+      .overall-cards { grid-template-columns: 1fr 1fr; }
+      .site-summary-cards { grid-template-columns: 1fr 1fr; }
+      .form-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 400px) {
+      .overall-cards { grid-template-columns: 1fr; }
+      .site-summary-cards { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-
 <div class="container">
 
   <header>
-    <h1>Finance Tracker</h1>
-    <p>Your data is saved automatically — even after closing.</p>
+    <h1>SammiReddy Finance</h1>
+    <p>Multi-site contractor tracker — all data saved automatically.</p>
   </header>
 
-  <!-- SUMMARY CARDS -->
-  <div class="summary">
-    <div class="card credit">
-      <div class="label">Total Credited</div>
-      <div class="amount" id="totalCredit">₹0.00</div>
+  <div class="tabs-wrapper" id="tabsWrapper"></div>
+
+  <!-- ══ SUMMARY PAGE ══ -->
+  <div class="summary-page" id="summaryPage">
+    <h2>Overall Summary</h2>
+    <div class="overall-cards">
+      <div class="card credit">
+        <div class="label">Total Credited</div>
+        <div class="amount" id="ovCredit">₹0.00</div>
+      </div>
+      <div class="card debit">
+        <div class="label">Total Debited</div>
+        <div class="amount" id="ovDebit">₹0.00</div>
+      </div>
+      <div class="card balance" id="ovBalanceCard">
+        <div class="label">Net Balance</div>
+        <div class="amount" id="ovBalance">₹0.00</div>
+      </div>
     </div>
-    <div class="card debit">
-      <div class="label">Total Debited</div>
-      <div class="amount" id="totalDebit">₹0.00</div>
-    </div>
-    <div class="card balance" id="balanceCard">
-      <div class="label">Balance</div>
-      <div class="amount" id="balance">₹0.00</div>
-    </div>
+    <div class="table-header"><h2>All Sites</h2></div>
+    <table class="site-breakdown">
+      <thead>
+        <tr>
+          <th>Site</th><th>Credited</th><th>Debited</th>
+          <th>Balance</th><th>Entries</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="siteSummaryBody"></tbody>
+    </table>
   </div>
 
-  <!-- INPUT FORM -->
-  <div class="form-grid">
-    <div class="field">
-      <label for="desc">Description</label>
-      <input type="text" id="desc" placeholder="e.g. Salary, Groceries…" />
+  <!-- ══ SITE PAGE ══ -->
+  <div class="site-page" id="sitePage">
+
+    <!-- EXPORT BUTTONS -->
+    <div class="export-row">
+      <button class="btn-export excel" onclick="exportExcel()">
+        📊 Export Excel
+      </button>
+      <button class="btn-export pdf" onclick="exportPDF()">
+        📄 Export PDF
+      </button>
     </div>
-    <div class="field">
-      <label for="amount">Amount (₹)</label>
-      <input type="number" id="amount" placeholder="0.00" min="0" step="0.01" />
+
+    <!-- SITE TOTALS -->
+    <div class="site-summary-cards">
+      <div class="card credit">
+        <div class="label">Total Credited</div>
+        <div class="amount" id="totalCredit">₹0.00</div>
+      </div>
+      <div class="card debit">
+        <div class="label">Total Debited</div>
+        <div class="amount" id="totalDebit">₹0.00</div>
+      </div>
+      <div class="card balance" id="balanceCard">
+        <div class="label">Balance</div>
+        <div class="amount" id="balance">₹0.00</div>
+      </div>
     </div>
-    <div class="field">
-      <label for="type">Type</label>
-      <select id="type">
-        <option value="credit">Credit ↑</option>
-        <option value="debit">Debit ↓</option>
+
+    <!-- FORM -->
+    <div class="form-grid">
+      <div class="field">
+        <label for="desc">Description</label>
+        <input type="text" id="desc" placeholder="e.g. Labour, Materials…" />
+      </div>
+      <div class="field">
+        <label for="amount">Amount (₹)</label>
+        <input type="number" id="amount" placeholder="0.00" min="0" step="0.01" />
+      </div>
+      <div class="field">
+        <label for="type">Type</label>
+        <select id="type">
+          <option value="credit">Credit ↑</option>
+          <option value="debit">Debit ↓</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="date">Date</label>
+        <input type="date" id="date" />
+      </div>
+    </div>
+    <div class="form-btn">
+      <button onclick="addTransaction()">+ Add Transaction</button>
+    </div>
+
+    <!-- SEARCH + FILTER -->
+    <div class="search-row">
+      <input class="search-input" id="searchInput" placeholder="🔍  Search description…" oninput="renderTable()" />
+      <select class="filter-select" id="filterType" onchange="renderTable()">
+        <option value="all">All</option>
+        <option value="credit">Credit only</option>
+        <option value="debit">Debit only</option>
       </select>
     </div>
-    <div class="field">
-      <label for="date">Date</label>
-      <!--
-        type="date" gives a native date picker on both
-        desktop and mobile — no extra library needed.
-        We set today's date as default via JavaScript below.
-      -->
-      <input type="date" id="date" />
+
+    <!-- TABLE -->
+    <div class="table-header">
+      <h2 id="tableTitle">Transactions</h2>
+      <button class="btn-ghost" onclick="clearAll()">Clear All</button>
     </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Date</th><th>Description</th>
+          <th>Type</th><th>Amount</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+
   </div>
-
-  <div class="form-btn">
-    <button onclick="addTransaction()">+ Add Transaction</button>
-  </div>
-
-  <!-- TABLE -->
-  <div class="table-header">
-    <h2>Transactions</h2>
-    <button class="btn-ghost" onclick="clearAll()">Clear All</button>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Date</th>
-        <th>Description</th>
-        <th>Type</th>
-        <th>Amount</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody id="tbody">
-      <tr>
-        <td colspan="6">
-          <div class="empty">
-            <div class="icon">📋</div>
-            No transactions yet. Add one above!
-          </div>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-
 </div>
 
-<!-- SAVE TOAST -->
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitle">Name your site</h3>
+    <input type="text" id="modalInput" placeholder="e.g. Sharma Residence…" maxlength="30" />
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-confirm" id="modalConfirmBtn">Create</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast">✓ Saved</div>
 
 <script>
-  /*
-    WHY localStorage:
-    localStorage is a mini database built into every browser.
-    It stores text (strings) that survive closing the tab/app.
-    We store our transactions array as JSON text, and load it back on startup.
+  /* ══════════════════════════
+     DATA
+  ══════════════════════════ */
+  let sites        = JSON.parse(localStorage.getItem('srf_sites'))  || [];
+  let activeSiteId = parseInt(localStorage.getItem('srf_active'))   || null;
+  let activeView   = localStorage.getItem('srf_view')               || 'summary';
+  let nextSiteId   = sites.length > 0 ? Math.max(...sites.map(s => s.id)) + 1 : 1;
 
-    JSON.stringify()  → converts array/object → text   (to save)
-    JSON.parse()      → converts text → array/object   (to load)
-  */
+  if (sites.length === 0) {
+    sites.push({ id: nextSiteId++, name: 'Site 1', transactions: [] });
+    saveAll();
+  }
 
-  // ── LOAD saved data when app opens ──
-  // If nothing saved yet, start with empty array []
-  let transactions = JSON.parse(localStorage.getItem('financeTransactions')) || [];
-
-  // Find the highest existing ID so nextId doesn't collide after reload
-  let nextId = transactions.length > 0
-    ? Math.max(...transactions.map(t => t.id)) + 1
-    : 1;
-
-  // ── Set today's date as default in the date input ──
-  // toISOString() gives "2026-03-04T..." — we take the first 10 chars "2026-03-04"
   document.getElementById('date').value = new Date().toISOString().slice(0, 10);
 
-  // ── SAVE to localStorage every time data changes ──
-  function saveData() {
-    localStorage.setItem('financeTransactions', JSON.stringify(transactions));
-    showToast(); // briefly show "✓ Saved"
+  /* ══════════════════════════
+     PERSISTENCE
+  ══════════════════════════ */
+  function saveAll() {
+    localStorage.setItem('srf_sites',  JSON.stringify(sites));
+    localStorage.setItem('srf_active', String(activeSiteId));
+    localStorage.setItem('srf_view',   String(activeView));
   }
 
-  // ── TOAST notification ──
-  function showToast() {
-    const toast = document.getElementById('toast');
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 1500);
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg || '✓ Saved';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
   }
 
-  // ── ADD transaction ──
+  /* ══════════════════════════
+     NAVIGATION
+  ══════════════════════════ */
+  function showView(view) {
+    activeView = view;
+    if (view !== 'summary') activeSiteId = view;
+    saveAll();
+    renderTabs();
+    if (view === 'summary') {
+      document.getElementById('summaryPage').classList.add('visible');
+      document.getElementById('sitePage').classList.remove('visible');
+      renderSummaryPage();
+    } else {
+      document.getElementById('summaryPage').classList.remove('visible');
+      document.getElementById('sitePage').classList.add('visible');
+      renderTable();
+    }
+  }
+
+  function getActiveSite() { return sites.find(s => s.id === activeSiteId); }
+
+  /* ══════════════════════════
+     TABS
+  ══════════════════════════ */
+  function renderTabs() {
+    const wrapper = document.getElementById('tabsWrapper');
+    const summaryTab = `
+      <div class="tab-summary ${activeView === 'summary' ? 'active' : ''}" onclick="showView('summary')">
+        ⬛ Overview
+      </div>`;
+    const siteTabs = sites.map(s => `
+      <div class="tab ${activeView === s.id ? 'active' : ''}" onclick="showView(${s.id})">
+        <span style="pointer-events:none">${s.name}</span>
+        <span class="tab-actions">
+          <span class="tab-icon rename" onclick="event.stopPropagation();openRenameModal(${s.id})" title="Rename">✎</span>
+          <span class="tab-icon del"    onclick="event.stopPropagation();deleteSite(${s.id})"      title="Delete">✕</span>
+        </span>
+      </div>`).join('');
+    wrapper.innerHTML = summaryTab + siteTabs +
+      `<button class="btn-new-site" onclick="openCreateModal()">+ New Site</button>`;
+  }
+
+  /* ══════════════════════════
+     SITE CRUD
+  ══════════════════════════ */
+  function deleteSite(id) {
+    const site = sites.find(s => s.id === id);
+    if (!confirm(`Delete "${site.name}" and all its transactions?`)) return;
+    sites = sites.filter(s => s.id !== id);
+    if (sites.length === 0) sites.push({ id: nextSiteId++, name: 'Site 1', transactions: [] });
+    if (activeView === id) showView('summary');
+    else { saveAll(); renderTabs(); }
+    showToast('🗑 Site deleted');
+  }
+
+  /* ══════════════════════════
+     MODAL
+  ══════════════════════════ */
+  let modalMode = 'create', renameTarget = null;
+
+  function openCreateModal() {
+    modalMode = 'create';
+    document.getElementById('modalTitle').textContent      = 'Name your site';
+    document.getElementById('modalConfirmBtn').textContent = 'Create Site';
+    document.getElementById('modalInput').value            = '';
+    document.getElementById('modalOverlay').classList.add('open');
+    setTimeout(() => document.getElementById('modalInput').focus(), 150);
+  }
+
+  function openRenameModal(id) {
+    modalMode = 'rename'; renameTarget = id;
+    const site = sites.find(s => s.id === id);
+    document.getElementById('modalTitle').textContent      = 'Rename site';
+    document.getElementById('modalConfirmBtn').textContent = 'Save';
+    document.getElementById('modalInput').value            = site.name;
+    document.getElementById('modalOverlay').classList.add('open');
+    setTimeout(() => { const i = document.getElementById('modalInput'); i.focus(); i.select(); }, 150);
+  }
+
+  function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+
+  function confirmModal() {
+    const name = document.getElementById('modalInput').value.trim();
+    if (!name) { alert('Please enter a name.'); return; }
+    if (modalMode === 'create') {
+      const ns = { id: nextSiteId++, name, transactions: [] };
+      sites.push(ns);
+      saveAll(); closeModal(); showView(ns.id);
+    } else {
+      sites.find(s => s.id === renameTarget).name = name;
+      saveAll(); closeModal(); renderTabs();
+      if (activeView === renameTarget) renderTable();
+      else if (activeView === 'summary') renderSummaryPage();
+      showToast('✎ Site renamed');
+    }
+  }
+
+  /* ══════════════════════════
+     TRANSACTIONS
+  ══════════════════════════ */
   function addTransaction() {
+    const site   = getActiveSite();
     const desc   = document.getElementById('desc').value.trim();
     const amount = parseFloat(document.getElementById('amount').value);
     const type   = document.getElementById('type').value;
     const date   = document.getElementById('date').value;
 
-    if (!desc) { alert('Please enter a description.'); return; }
+    if (!site)                        { alert('No active site.'); return; }
+    if (!desc)                        { alert('Please enter a description.'); return; }
     if (isNaN(amount) || amount <= 0) { alert('Please enter a valid amount.'); return; }
-    if (!date) { alert('Please select a date.'); return; }
+    if (!date)                        { alert('Please select a date.'); return; }
 
-    transactions.push({ id: nextId++, desc, type, amount, date });
+    const nextTxId = site.transactions.length > 0
+      ? Math.max(...site.transactions.map(t => t.id)) + 1 : 1;
+    site.transactions.push({ id: nextTxId, desc, type, amount, date });
 
     document.getElementById('desc').value   = '';
     document.getElementById('amount').value = '';
-    // Keep date as-is — user likely adding multiple entries for same day
     document.getElementById('desc').focus();
 
-    saveData(); // ← saves to localStorage
-    render();
+    saveAll(); showToast('✓ Saved'); renderTable();
   }
 
-  // ── DELETE one transaction ──
   function deleteTransaction(id) {
-    transactions = transactions.filter(t => t.id !== id);
-    saveData();
-    render();
+    const site = getActiveSite();
+    site.transactions = site.transactions.filter(t => t.id !== id);
+    saveAll(); showToast('✓ Saved'); renderTable();
   }
 
-  // ── CLEAR ALL ──
   function clearAll() {
-    if (transactions.length === 0) return;
-    if (confirm('Clear all transactions? This cannot be undone.')) {
-      transactions = [];
-      localStorage.removeItem('financeTransactions'); // wipe from storage too
-      render();
+    const site = getActiveSite();
+    if (!site || site.transactions.length === 0) return;
+    if (confirm(`Clear all transactions in "${site.name}"?`)) {
+      site.transactions = []; saveAll(); renderTable();
     }
   }
 
-  // ── FORMAT currency ──
-  function formatCurrency(n) {
-    return '₹' + n.toFixed(2);
+  /* ══════════════════════════
+     HELPERS
+  ══════════════════════════ */
+  function fmt(n) { return '₹' + n.toFixed(2); }
+
+  function fmtDate(str) {
+    if (!str) return '—';
+    const [y, m, d] = str.split('-');
+    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${d} ${mo[parseInt(m)-1]} ${y}`;
   }
 
-  // ── FORMAT date for display: "2026-03-04" → "04 Mar 2026" ──
-  function formatDate(dateStr) {
-    if (!dateStr) return '—';
-    const [year, month, day] = dateStr.split('-');
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${day} ${months[parseInt(month) - 1]} ${year}`;
+  function highlight(text, query) {
+    if (!query) return text;
+    const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return text.replace(new RegExp(`(${esc})`, 'gi'), '<mark>$1</mark>');
   }
 
-  // ── UPDATE totals ──
-  function updateTotals() {
-    const totalCredit = transactions
-      .filter(t => t.type === 'credit')
-      .reduce((acc, t) => acc + t.amount, 0);
-
-    const totalDebit = transactions
-      .filter(t => t.type === 'debit')
-      .reduce((acc, t) => acc + t.amount, 0);
-
-    const balance = totalCredit - totalDebit;
-
-    document.getElementById('totalCredit').textContent = formatCurrency(totalCredit);
-    document.getElementById('totalDebit').textContent  = formatCurrency(totalDebit);
-    document.getElementById('balance').textContent     = formatCurrency(Math.abs(balance));
-
-    document.getElementById('balanceCard').classList.toggle('negative', balance < 0);
+  function siteTotals(site) {
+    const c = site.transactions.filter(t => t.type === 'credit').reduce((a, t) => a + t.amount, 0);
+    const d = site.transactions.filter(t => t.type === 'debit' ).reduce((a, t) => a + t.amount, 0);
+    return { credit: c, debit: d, balance: c - d };
   }
 
-  // ── RENDER table ──
-  function render() {
-    const tbody = document.getElementById('tbody');
+  /* ══════════════════════════
+     EXPORT — EXCEL
+  ══════════════════════════ */
+  function exportExcel() {
+    const site = getActiveSite();
+    if (!site) return;
+    if (site.transactions.length === 0) { alert('No transactions to export.'); return; }
 
-    if (transactions.length === 0) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="6">
-            <div class="empty">
-              <div class="icon">📋</div>
-              No transactions yet. Add one above!
-            </div>
-          </td>
+    const totals = siteTotals(site);
+    const sorted = [...site.transactions].sort((a, b) => b.date.localeCompare(a.date));
+
+    // Build rows
+    const rows = sorted.map((t, i) => ({
+      '#':          i + 1,
+      'Date':       fmtDate(t.date),
+      'Description': t.desc,
+      'Type':       t.type.charAt(0).toUpperCase() + t.type.slice(1),
+      'Amount (₹)': t.type === 'credit' ? t.amount : -t.amount,
+    }));
+
+    // Blank row then summary
+    rows.push({});
+    rows.push({ 'Description': 'Total Credited', 'Amount (₹)': totals.credit });
+    rows.push({ 'Description': 'Total Debited',  'Amount (₹)': -totals.debit });
+    rows.push({ 'Description': 'Net Balance',    'Amount (₹)': totals.balance });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Column widths
+    ws['!cols'] = [
+      { wch: 4 }, { wch: 14 }, { wch: 32 }, { wch: 10 }, { wch: 14 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, site.name.slice(0, 31));
+
+    const filename = `${site.name.replace(/\s+/g, '_')}_transactions.xlsx`;
+    XLSX.writeFile(wb, filename);
+    showToast('📊 Excel downloaded!');
+  }
+
+  /* ══════════════════════════
+     EXPORT — PDF
+  ══════════════════════════ */
+  function exportPDF() {
+    const site = getActiveSite();
+    if (!site) return;
+    if (site.transactions.length === 0) { alert('No transactions to export.'); return; }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const totals = siteTotals(site);
+    const sorted = [...site.transactions].sort((a, b) => b.date.localeCompare(a.date));
+    const today  = fmtDate(new Date().toISOString().slice(0, 10));
+
+    // ── Header ──
+    doc.setFillColor(15, 15, 15);
+    doc.rect(0, 0, 210, 40, 'F');
+
+    doc.setTextColor(250, 204, 21);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.text('SammiReddy Finance', 14, 16);
+
+    doc.setTextColor(200, 200, 200);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Site: ${site.name}`, 14, 25);
+    doc.text(`Exported: ${today}`, 14, 31);
+
+    // ── Summary boxes ──
+    const boxY = 46;
+    const boxes = [
+      { label: 'Total Credited', value: fmt(totals.credit),  color: [74, 222, 128] },
+      { label: 'Total Debited',  value: fmt(totals.debit),   color: [248, 113, 113] },
+      { label: 'Net Balance',    value: fmt(Math.abs(totals.balance)),
+        color: totals.balance >= 0 ? [250, 204, 21] : [248, 113, 113] },
+    ];
+
+    boxes.forEach((b, i) => {
+      const x = 14 + i * 62;
+      doc.setFillColor(30, 30, 30);
+      doc.roundedRect(x, boxY, 58, 18, 2, 2, 'F');
+      doc.setTextColor(...b.color);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(b.label.toUpperCase(), x + 4, boxY + 6);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(b.value, x + 4, boxY + 14);
+    });
+
+    // ── Transactions table ──
+    const tableRows = sorted.map((t, i) => [
+      i + 1,
+      fmtDate(t.date),
+      t.desc,
+      t.type.charAt(0).toUpperCase() + t.type.slice(1),
+      (t.type === 'credit' ? '+' : '-') + fmt(t.amount),
+    ]);
+
+    doc.autoTable({
+      startY: boxY + 26,
+      head: [['#', 'Date', 'Description', 'Type', 'Amount']],
+      body: tableRows,
+      styles: {
+        font: 'helvetica',
+        fontSize: 9,
+        cellPadding: 3,
+        textColor: [220, 220, 220],
+        fillColor: [20, 20, 20],
+        lineColor: [50, 50, 50],
+        lineWidth: 0.2,
+      },
+      headStyles: {
+        fillColor: [30, 30, 30],
+        textColor: [150, 150, 150],
+        fontStyle: 'bold',
+        fontSize: 7.5,
+      },
+      alternateRowStyles: { fillColor: [26, 26, 26] },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 80 },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 30, halign: 'right' },
+      },
+      didParseCell: (data) => {
+        // Colour the Amount column and Type column
+        if (data.section === 'body') {
+          const rowData = tableRows[data.row.index];
+          if (data.column.index === 4) {
+            data.cell.styles.textColor = rowData[3] === 'Credit'
+              ? [74, 222, 128] : [248, 113, 113];
+          }
+          if (data.column.index === 3) {
+            data.cell.styles.textColor = rowData[3] === 'Credit'
+              ? [74, 222, 128] : [248, 113, 113];
+          }
+        }
+      },
+    });
+
+    // ── Footer ──
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7);
+      doc.setTextColor(80, 80, 80);
+      doc.text(
+        `SammiReddy Finance Tracker  |  ${site.name}  |  Page ${i} of ${pageCount}`,
+        14, 290
+      );
+    }
+
+    const filename = `${site.name.replace(/\s+/g, '_')}_transactions.pdf`;
+    doc.save(filename);
+    showToast('📄 PDF downloaded!');
+  }
+
+  /* ══════════════════════════
+     RENDER — SUMMARY PAGE
+  ══════════════════════════ */
+  function renderSummaryPage() {
+    let totalC = 0, totalD = 0;
+    sites.forEach(s => { const t = siteTotals(s); totalC += t.credit; totalD += t.debit; });
+    const bal = totalC - totalD;
+
+    document.getElementById('ovCredit').textContent  = fmt(totalC);
+    document.getElementById('ovDebit').textContent   = fmt(totalD);
+    document.getElementById('ovBalance').textContent = fmt(Math.abs(bal));
+    document.getElementById('ovBalanceCard').classList.toggle('negative', bal < 0);
+
+    const tbody = document.getElementById('siteSummaryBody');
+    if (sites.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="icon">🏗️</div>No sites yet.</div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = sites.map(s => {
+      const t = siteTotals(s);
+      const balColor = t.balance >= 0 ? 'var(--credit)' : 'var(--debit)';
+      return `
+        <tr onclick="showView(${s.id})" style="cursor:pointer">
+          <td style="font-weight:500">${s.name}</td>
+          <td style="color:var(--credit)">${fmt(t.credit)}</td>
+          <td style="color:var(--debit)">${fmt(t.debit)}</td>
+          <td style="color:${balColor};font-weight:500">${fmt(Math.abs(t.balance))}</td>
+          <td style="color:var(--muted)">${s.transactions.length}</td>
+          <td class="go-arrow">→</td>
         </tr>`;
-      updateTotals();
+    }).join('');
+  }
+
+  /* ══════════════════════════
+     RENDER — SITE TABLE
+  ══════════════════════════ */
+  function renderTable() {
+    const site   = getActiveSite();
+    const tbody  = document.getElementById('tbody');
+    const query  = document.getElementById('searchInput').value.trim().toLowerCase();
+    const filter = document.getElementById('filterType').value;
+
+    document.getElementById('tableTitle').textContent =
+      site ? `${site.name} — Transactions` : 'Transactions';
+
+    if (!site || site.transactions.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="icon">🏗️</div>No transactions yet.</div></td></tr>`;
+      updateSiteTotals([]);
       return;
     }
 
-    // Sort by date newest first so latest entry always appears at top
-    const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
+    let txns = [...site.transactions];
+    if (filter !== 'all') txns = txns.filter(t => t.type === filter);
+    if (query)            txns = txns.filter(t => t.desc.toLowerCase().includes(query));
+    txns.sort((a, b) => b.date.localeCompare(a.date));
 
-    tbody.innerHTML = sorted.map((t, index) => `
+    if (txns.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="icon">🔍</div>No results for "${query}"</div></td></tr>`;
+      updateSiteTotals([]);
+      return;
+    }
+
+    tbody.innerHTML = txns.map((t, i) => `
       <tr>
-        <td style="color: var(--muted); font-size: 0.75rem;">${index + 1}</td>
-        <td class="date-cell">${formatDate(t.date)}</td>
-        <td>${t.desc}</td>
+        <td style="color:var(--muted);font-size:0.72rem">${i + 1}</td>
+        <td class="date-cell">${fmtDate(t.date)}</td>
+        <td>${highlight(t.desc, query)}</td>
         <td><span class="badge ${t.type}">${t.type}</span></td>
         <td class="amount-cell ${t.type}">
-          ${t.type === 'credit' ? '+' : '−'}${formatCurrency(t.amount)}
+          ${t.type === 'credit' ? '+' : '−'}${fmt(t.amount)}
         </td>
-        <td>
-          <button class="delete-btn" onclick="deleteTransaction(${t.id})" title="Delete">✕</button>
-        </td>
-      </tr>
-    `).join('');
+        <td><button class="delete-btn" onclick="deleteTransaction(${t.id})" title="Delete">✕</button></td>
+      </tr>`).join('');
 
-    updateTotals();
+    updateSiteTotals(txns);
   }
 
-  // ── KEYBOARD shortcuts ──
+  function updateSiteTotals(txns) {
+    const c = txns.filter(t => t.type === 'credit').reduce((a, t) => a + t.amount, 0);
+    const d = txns.filter(t => t.type === 'debit' ).reduce((a, t) => a + t.amount, 0);
+    const b = c - d;
+    document.getElementById('totalCredit').textContent = fmt(c);
+    document.getElementById('totalDebit').textContent  = fmt(d);
+    document.getElementById('balance').textContent     = fmt(Math.abs(b));
+    document.getElementById('balanceCard').classList.toggle('negative', b < 0);
+  }
+
+  /* ══════════════════════════
+     KEYBOARD
+  ══════════════════════════ */
   document.getElementById('desc').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('amount').focus();
   });
@@ -544,10 +893,27 @@
   document.getElementById('date').addEventListener('keydown', e => {
     if (e.key === 'Enter') addTransaction();
   });
+  document.getElementById('modalInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter')  confirmModal();
+    if (e.key === 'Escape') closeModal();
+  });
+  document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+  document.getElementById('modalConfirmBtn').addEventListener('click', confirmModal);
 
-  // ── INIT: render whatever was saved ──
-  render();
+  /* ══════════════════════════
+     INIT
+  ══════════════════════════ */
+  const savedView = localStorage.getItem('srf_view');
+  const viewId    = parseInt(savedView);
+  if (savedView === 'summary' || !savedView) {
+    showView('summary');
+  } else if (!isNaN(viewId) && sites.find(s => s.id === viewId)) {
+    activeSiteId = viewId; showView(viewId);
+  } else {
+    showView('summary');
+  }
 </script>
-
 </body>
 </html>
