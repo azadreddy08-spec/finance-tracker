@@ -4,36 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Finance Tracker</title>
-
-  <!--
-    WHY: We import a Google Font for personality.
-    'DM Mono' gives a ledger/terminal feel — fitting for a finance tool.
-  -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
 
   <style>
-    /*
-      WHY: CSS variables (--name) let you define colors/sizes once
-      and reuse them everywhere. If you want to change the accent color,
-      you only change ONE line instead of hunting through the file.
-    */
     :root {
       --bg: #0f0f0f;
       --surface: #1a1a1a;
       --border: #2a2a2a;
       --text: #e8e8e8;
       --muted: #666;
-      --credit: #4ade80;   /* green for money coming IN */
-      --debit: #f87171;    /* red for money going OUT */
-      --accent: #facc15;   /* yellow highlight */
+      --credit: #4ade80;
+      --debit: #f87171;
+      --accent: #facc15;
     }
 
-    /*
-      WHY: box-sizing: border-box makes layout math WAY easier.
-      With it, padding is included IN the width, not added ON TOP.
-      margin: 0; padding: 0 resets browser defaults (every browser
-      adds its own spacing otherwise — very annoying).
-    */
     *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
@@ -48,19 +32,12 @@
       padding: 40px 20px;
     }
 
-    /*
-      WHY: max-width + margin: auto centers the content.
-      The content won't stretch horribly wide on big screens.
-    */
     .container {
-      max-width: 720px;
+      max-width: 760px;
       margin: 0 auto;
     }
 
-    /* ── HEADER ── */
-    header {
-      margin-bottom: 40px;
-    }
+    header { margin-bottom: 40px; }
 
     header h1 {
       font-family: 'Syne', sans-serif;
@@ -77,10 +54,6 @@
     }
 
     /* ── SUMMARY CARDS ── */
-    /*
-      WHY: CSS Grid with 3 columns makes the 3 cards sit side by side.
-      gap adds space between them without needing margins.
-    */
     .summary {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -103,10 +76,6 @@
       margin-bottom: 8px;
     }
 
-    /*
-      WHY: tabular-nums makes numbers align properly in monospace —
-      each digit takes the same width so amounts don't jump around.
-    */
     .card .amount {
       font-size: 1.5rem;
       font-weight: 500;
@@ -115,27 +84,27 @@
 
     .card.credit .amount { color: var(--credit); }
     .card.debit  .amount { color: var(--debit);  }
-
-    /*
-      WHY: The balance card changes color dynamically via a class
-      added with JavaScript (see the updateTotals function below).
-    */
     .card.balance .amount { color: var(--accent); }
     .card.balance.negative .amount { color: var(--debit); }
 
-    /* ── INPUT FORM ── */
-    .form-row {
+    /* ── FORM ── */
+    /*
+      Now 4 columns: description, amount, type, date
+      Then a full-width Add button below
+    */
+    .form-grid {
       display: grid;
-      /*
-        WHY: 1fr 1fr auto means:
-        - First input: takes equal share of space
-        - Second input: takes equal share of space
-        - Button: only as wide as its content
-      */
-      grid-template-columns: 1fr 1fr auto;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
       gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .form-btn {
       margin-bottom: 28px;
-      align-items: end;
+    }
+
+    .form-btn button {
+      width: 100%;
     }
 
     .field {
@@ -151,11 +120,6 @@
       letter-spacing: 1px;
     }
 
-    /*
-      WHY: outline: none removes the browser's default blue focus ring.
-      We then add our own (:focus border) so keyboard users can still
-      see where they are — accessibility matters!
-    */
     .field input, .field select {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -169,11 +133,16 @@
       width: 100%;
     }
 
+    /* Style date input calendar icon to match dark theme */
+    .field input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.5);
+      cursor: pointer;
+    }
+
     .field input:focus, .field select:focus {
       border-color: var(--accent);
     }
 
-    /* Style the dropdown arrow area */
     .field select {
       appearance: none;
       cursor: pointer;
@@ -193,10 +162,6 @@
       font-size: 0.85rem;
       font-weight: 500;
       padding: 10px 20px;
-      /*
-        WHY: transition makes hover feel smooth instead of instant.
-        0.15s is fast enough to feel snappy but visible.
-      */
       transition: opacity 0.15s, transform 0.1s;
       white-space: nowrap;
     }
@@ -204,7 +169,7 @@
     button:hover  { opacity: 0.85; }
     button:active { transform: scale(0.97); }
 
-    /* ── TRANSACTION TABLE ── */
+    /* ── TABLE HEADER ── */
     .table-header {
       display: flex;
       justify-content: space-between;
@@ -217,10 +182,6 @@
       font-size: 1rem;
     }
 
-    /*
-      WHY: A small "Clear All" button styled with just a border (ghost style)
-      so it doesn't compete visually with the main Add button.
-    */
     .btn-ghost {
       background: transparent;
       border: 1px solid var(--border);
@@ -231,9 +192,10 @@
 
     .btn-ghost:hover { border-color: var(--debit); color: var(--debit); opacity: 1; }
 
+    /* ── TABLE ── */
     table {
       width: 100%;
-      border-collapse: collapse; /* WHY: removes double borders between cells */
+      border-collapse: collapse;
     }
 
     thead th {
@@ -248,9 +210,6 @@
 
     tbody tr {
       border-bottom: 1px solid var(--border);
-      /*
-        WHY: transition on background lets the delete hover be smooth.
-      */
       transition: background 0.1s;
     }
 
@@ -260,6 +219,12 @@
       padding: 12px;
       font-size: 0.85rem;
       vertical-align: middle;
+    }
+
+    .date-cell {
+      color: var(--muted);
+      font-size: 0.75rem;
+      white-space: nowrap;
     }
 
     .badge {
@@ -278,10 +243,6 @@
     .amount-cell.credit { color: var(--credit); }
     .amount-cell.debit  { color: var(--debit);  }
 
-    /*
-      WHY: The delete button is hidden by default and only shows
-      on row hover — keeps the UI clean and uncluttered.
-    */
     .delete-btn {
       background: transparent;
       border: none;
@@ -306,14 +267,32 @@
 
     .empty .icon { font-size: 2rem; margin-bottom: 10px; }
 
-    /* ── RESPONSIVE: stack on small screens ── */
+    /* ── SAVE INDICATOR ── */
     /*
-      WHY: On phones, 3 columns is too cramped.
-      Media queries let you change layout at different screen sizes.
+      A small toast that briefly appears when data is saved.
+      It fades in, stays for a moment, then fades out via CSS animation.
     */
-    @media (max-width: 500px) {
-      .summary { grid-template-columns: 1fr; }
-      .form-row { grid-template-columns: 1fr; }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--credit);
+      color: var(--credit);
+      font-size: 0.75rem;
+      padding: 10px 16px;
+      border-radius: 8px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    .toast.show { opacity: 1; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .summary    { grid-template-columns: 1fr; }
+      .form-grid  { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
@@ -323,7 +302,7 @@
 
   <header>
     <h1>Finance Tracker</h1>
-    <p>Enter transactions — totals update instantly.</p>
+    <p>Your data is saved automatically — even after closing.</p>
   </header>
 
   <!-- SUMMARY CARDS -->
@@ -343,7 +322,7 @@
   </div>
 
   <!-- INPUT FORM -->
-  <div class="form-row">
+  <div class="form-grid">
     <div class="field">
       <label for="desc">Description</label>
       <input type="text" id="desc" placeholder="e.g. Salary, Groceries…" />
@@ -359,10 +338,22 @@
         <option value="debit">Debit ↓</option>
       </select>
     </div>
-    <button onclick="addTransaction()">+ Add</button>
+    <div class="field">
+      <label for="date">Date</label>
+      <!--
+        type="date" gives a native date picker on both
+        desktop and mobile — no extra library needed.
+        We set today's date as default via JavaScript below.
+      -->
+      <input type="date" id="date" />
+    </div>
   </div>
 
-  <!-- TRANSACTIONS TABLE -->
+  <div class="form-btn">
+    <button onclick="addTransaction()">+ Add Transaction</button>
+  </div>
+
+  <!-- TABLE -->
   <div class="table-header">
     <h2>Transactions</h2>
     <button class="btn-ghost" onclick="clearAll()">Clear All</button>
@@ -372,19 +363,16 @@
     <thead>
       <tr>
         <th>#</th>
+        <th>Date</th>
         <th>Description</th>
         <th>Type</th>
         <th>Amount</th>
         <th></th>
       </tr>
     </thead>
-    <!--
-      WHY: tbody is where rows are injected by JavaScript.
-      We target it with document.getElementById('tbody').
-    -->
     <tbody id="tbody">
-      <tr id="emptyRow">
-        <td colspan="5">
+      <tr>
+        <td colspan="6">
           <div class="empty">
             <div class="icon">📋</div>
             No transactions yet. Add one above!
@@ -396,79 +384,100 @@
 
 </div>
 
+<!-- SAVE TOAST -->
+<div class="toast" id="toast">✓ Saved</div>
+
 <script>
   /*
-    WHY: We store all transactions in an array of objects.
-    Each object holds: id, description, type, amount.
-    This is the "source of truth" — the UI is just a reflection of this data.
-    If we need to delete or sum, we work on the array, then re-render.
-  */
-  let transactions = [];
-  let nextId = 1; // unique ID counter for each transaction
+    WHY localStorage:
+    localStorage is a mini database built into every browser.
+    It stores text (strings) that survive closing the tab/app.
+    We store our transactions array as JSON text, and load it back on startup.
 
+    JSON.stringify()  → converts array/object → text   (to save)
+    JSON.parse()      → converts text → array/object   (to load)
+  */
+
+  // ── LOAD saved data when app opens ──
+  // If nothing saved yet, start with empty array []
+  let transactions = JSON.parse(localStorage.getItem('financeTransactions')) || [];
+
+  // Find the highest existing ID so nextId doesn't collide after reload
+  let nextId = transactions.length > 0
+    ? Math.max(...transactions.map(t => t.id)) + 1
+    : 1;
+
+  // ── Set today's date as default in the date input ──
+  // toISOString() gives "2026-03-04T..." — we take the first 10 chars "2026-03-04"
+  document.getElementById('date').value = new Date().toISOString().slice(0, 10);
+
+  // ── SAVE to localStorage every time data changes ──
+  function saveData() {
+    localStorage.setItem('financeTransactions', JSON.stringify(transactions));
+    showToast(); // briefly show "✓ Saved"
+  }
+
+  // ── TOAST notification ──
+  function showToast() {
+    const toast = document.getElementById('toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1500);
+  }
+
+  // ── ADD transaction ──
   function addTransaction() {
-    // Get input values
     const desc   = document.getElementById('desc').value.trim();
     const amount = parseFloat(document.getElementById('amount').value);
     const type   = document.getElementById('type').value;
+    const date   = document.getElementById('date').value;
 
-    /*
-      WHY: Validate before adding. isNaN checks if the value is
-      "Not a Number". We also check > 0 so someone can't add ₹0.
-    */
-    if (!desc) {
-      alert('Please enter a description.');
-      return;
-    }
-    if (isNaN(amount) || amount <= 0) {
-      alert('Please enter a valid amount greater than 0.');
-      return;
-    }
+    if (!desc) { alert('Please enter a description.'); return; }
+    if (isNaN(amount) || amount <= 0) { alert('Please enter a valid amount.'); return; }
+    if (!date) { alert('Please select a date.'); return; }
 
-    // Push a new transaction object into the array
-    transactions.push({ id: nextId++, desc, type, amount });
+    transactions.push({ id: nextId++, desc, type, amount, date });
 
-    // Clear the inputs so user can add another quickly
     document.getElementById('desc').value   = '';
     document.getElementById('amount').value = '';
-    document.getElementById('desc').focus(); // refocus for speed
+    // Keep date as-is — user likely adding multiple entries for same day
+    document.getElementById('desc').focus();
 
-    // Re-render the table and totals
+    saveData(); // ← saves to localStorage
     render();
   }
 
+  // ── DELETE one transaction ──
   function deleteTransaction(id) {
-    /*
-      WHY: filter() creates a NEW array keeping only items
-      where the condition is true. We keep everything EXCEPT
-      the item with the matching id. Original data is never mutated.
-    */
     transactions = transactions.filter(t => t.id !== id);
+    saveData();
     render();
   }
 
+  // ── CLEAR ALL ──
   function clearAll() {
     if (transactions.length === 0) return;
-    if (confirm('Clear all transactions?')) {
+    if (confirm('Clear all transactions? This cannot be undone.')) {
       transactions = [];
+      localStorage.removeItem('financeTransactions'); // wipe from storage too
       render();
     }
   }
 
+  // ── FORMAT currency ──
   function formatCurrency(n) {
-    /*
-      WHY: toFixed(2) ensures we always show 2 decimal places.
-      ₹1000 shows as ₹1000.00 — consistent, professional.
-    */
     return '₹' + n.toFixed(2);
   }
 
+  // ── FORMAT date for display: "2026-03-04" → "04 Mar 2026" ──
+  function formatDate(dateStr) {
+    if (!dateStr) return '—';
+    const [year, month, day] = dateStr.split('-');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${day} ${months[parseInt(month) - 1]} ${year}`;
+  }
+
+  // ── UPDATE totals ──
   function updateTotals() {
-    /*
-      WHY: reduce() is perfect for summing.
-      It iterates the array, accumulating a running total (acc).
-      We start with 0 (the second argument to reduce).
-    */
     const totalCredit = transactions
       .filter(t => t.type === 'credit')
       .reduce((acc, t) => acc + t.amount, 0);
@@ -483,19 +492,17 @@
     document.getElementById('totalDebit').textContent  = formatCurrency(totalDebit);
     document.getElementById('balance').textContent     = formatCurrency(Math.abs(balance));
 
-    // Change balance card color if negative
-    const balanceCard = document.getElementById('balanceCard');
-    balanceCard.classList.toggle('negative', balance < 0);
+    document.getElementById('balanceCard').classList.toggle('negative', balance < 0);
   }
 
+  // ── RENDER table ──
   function render() {
     const tbody = document.getElementById('tbody');
 
-    // Show empty state if no transactions
     if (transactions.length === 0) {
       tbody.innerHTML = `
-        <tr id="emptyRow">
-          <td colspan="5">
+        <tr>
+          <td colspan="6">
             <div class="empty">
               <div class="icon">📋</div>
               No transactions yet. Add one above!
@@ -506,26 +513,19 @@
       return;
     }
 
-    /*
-      WHY: We build the HTML as a string first, then set innerHTML once.
-      This is faster than creating DOM elements one by one and appending them.
-      map() turns each transaction object into an HTML string.
-      join('') stitches the array of strings together.
-    */
-    tbody.innerHTML = transactions.map((t, index) => `
+    // Sort by date newest first so latest entry always appears at top
+    const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
+
+    tbody.innerHTML = sorted.map((t, index) => `
       <tr>
         <td style="color: var(--muted); font-size: 0.75rem;">${index + 1}</td>
+        <td class="date-cell">${formatDate(t.date)}</td>
         <td>${t.desc}</td>
         <td><span class="badge ${t.type}">${t.type}</span></td>
         <td class="amount-cell ${t.type}">
           ${t.type === 'credit' ? '+' : '−'}${formatCurrency(t.amount)}
         </td>
         <td>
-          <!--
-            WHY: onclick passes the transaction's unique id to deleteTransaction.
-            This way we know exactly which one to remove, even if descriptions
-            are the same.
-          -->
           <button class="delete-btn" onclick="deleteTransaction(${t.id})" title="Delete">✕</button>
         </td>
       </tr>
@@ -534,16 +534,19 @@
     updateTotals();
   }
 
-  /*
-    WHY: Allow pressing Enter on description or amount field to submit.
-    Small UX touch that makes repeated data entry much faster.
-  */
+  // ── KEYBOARD shortcuts ──
   document.getElementById('desc').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('amount').focus();
   });
   document.getElementById('amount').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('date').focus();
+  });
+  document.getElementById('date').addEventListener('keydown', e => {
     if (e.key === 'Enter') addTransaction();
   });
+
+  // ── INIT: render whatever was saved ──
+  render();
 </script>
 
 </body>
