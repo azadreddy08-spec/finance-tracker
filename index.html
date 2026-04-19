@@ -104,7 +104,7 @@
     /* FORM */
     .form-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
     .form-btn{margin-bottom:20px;}
-    .form-btn button{width:100%;}
+    .form-btn button{width:100%;min-height:48px;font-size:1rem;touch-action:manipulation;}
     .field{display:flex;flex-direction:column;gap:6px;}
     .field label{font-size:0.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
     .field input,.field select{
@@ -138,6 +138,7 @@
       background:var(--accent);border:none;border-radius:8px;color:#000;
       cursor:pointer;font-family:'DM Mono',monospace;font-size:0.85rem;
       font-weight:500;padding:10px 20px;transition:opacity 0.15s,transform 0.1s;white-space:nowrap;
+      touch-action:manipulation;-webkit-tap-highlight-color:transparent;
     }
     button:hover{opacity:0.85;}
     button:active{transform:scale(0.97);}
@@ -260,6 +261,17 @@
   <!-- ══ OVERVIEW PAGE ══ -->
   <div class="page" id="summaryPage">
     <p class="summary-page-title">Overall Summary</p>
+
+    <!-- BACKUP / RESTORE ROW -->
+    <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;">
+      <button type="button" class="btn-export" onclick="backupData()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;font-family:'DM Mono',monospace;font-size:0.78rem;padding:8px 14px;cursor:pointer;touch-action:manipulation;">
+        💾 Backup All Data
+      </button>
+      <label style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:'DM Mono',monospace;font-size:0.78rem;padding:8px 14px;touch-action:manipulation;">
+        📂 Restore from Backup
+        <input type="file" id="restoreInput" accept=".json" onchange="restoreData(this)" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;"/>
+      </label>
+    </div>
     <div class="three-cards">
       <div class="card credit"><div class="label">Total Credited</div><div class="amount" id="ovCredit">₹0.00</div></div>
       <div class="card debit"><div class="label">Total Debited</div><div class="amount" id="ovDebit">₹0.00</div></div>
@@ -320,17 +332,23 @@
       </div>
 
       <!-- RECEIPT ATTACH -->
-      <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;">
-        <label class="receipt-label" for="receiptInput">
-          📸 Attach Receipt (optional)
-        </label>
-        <input type="file" id="receiptInput" accept="image/*" capture="environment" onchange="previewReceipt(this)"/>
-        <img id="receiptPreview" class="receipt-preview" onclick="openLightbox(this.src)" title="Click to enlarge"/>
-        <span id="receiptClear" style="display:none;color:var(--muted);cursor:pointer;font-size:0.75rem;" onclick="clearReceipt()">✕ remove</span>
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <button type="button" onclick="document.getElementById('receiptInput').click()"
+            style="background:var(--surface);border:1px dashed var(--border);border-radius:8px;
+            color:var(--muted);cursor:pointer;font-family:'DM Mono',monospace;font-size:0.8rem;
+            padding:9px 14px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">
+            📸 Camera / Gallery (optional)
+          </button>
+          <input type="file" id="receiptInput" accept="image/*" onchange="previewReceipt(this)"
+            style="display:none;visibility:hidden;position:absolute;left:-9999px;"/>
+          <img id="receiptPreview" class="receipt-preview" onclick="openLightbox(this.src)" title="View receipt"/>
+          <span id="receiptClear" style="display:none;color:var(--muted);cursor:pointer;font-size:0.75rem;" onclick="clearReceipt()">✕ remove</span>
+        </div>
       </div>
 
       <div class="form-btn">
-        <button onclick="addTransaction()">+ Add Transaction</button>
+        <button type="button" onclick="addTransaction()">+ Add Transaction</button>
       </div>
 
       <div class="search-row">
@@ -441,7 +459,7 @@
 let sites        = JSON.parse(localStorage.getItem('srf_sites'))  || [];
 let activeSiteId = parseInt(localStorage.getItem('srf_active'))   || null;
 let activeView   = localStorage.getItem('srf_view')               || 'summary';
-let nextSiteId   = sites.length > 0 ? Math.max(...sites.map(s=>s.id))+1 : 1;
+let nextSiteId   = sites.length > 0 ? sites.reduce((max,s)=>s.id>max?s.id:max,0)+1 : 1;
 let chartInstance = null;
 let pendingReceipt = null; // base64 string of attached photo
 
@@ -458,9 +476,25 @@ document.getElementById('invNumber').value = 'INV-00' + (Math.floor(Math.random(
    PERSISTENCE
 ══════════════════════════════ */
 function saveAll(){
-  localStorage.setItem('srf_sites',  JSON.stringify(sites));
-  localStorage.setItem('srf_active', String(activeSiteId));
-  localStorage.setItem('srf_view',   String(activeView));
+  try {
+    localStorage.setItem('srf_sites',  JSON.stringify(sites));
+    localStorage.setItem('srf_active', String(activeSiteId));
+    localStorage.setItem('srf_view',   String(activeView));
+  } catch(e) {
+    // Storage full — likely due to large receipt photos
+    // Strip receipts from oldest transactions and retry
+    sites.forEach(s => {
+      s.transactions.forEach(t => { t.receipt = null; });
+    });
+    try {
+      localStorage.setItem('srf_sites', JSON.stringify(sites));
+      localStorage.setItem('srf_active', String(activeSiteId));
+      localStorage.setItem('srf_view',   String(activeView));
+      alert('Storage was full — receipt photos were removed to save your transactions. All transaction data is safe.');
+    } catch(e2) {
+      alert('Could not save — storage is full. Please clear some data.');
+    }
+  }
 }
 
 function showToast(msg){
@@ -627,7 +661,7 @@ function addTransaction(){
   if(!date)                       {alert('Please select a date.');return;}
 
   const nextTxId=site.transactions.length>0
-    ?Math.max(...site.transactions.map(t=>t.id))+1:1;
+    ?site.transactions.reduce((max,t)=>t.id>max?t.id:max,0)+1:1;
 
   site.transactions.push({
     id:nextTxId, desc, type, amount, date,
@@ -1015,6 +1049,53 @@ function generateInvoice(){
 
   doc.save(`Invoice_${number}_${client.replace(/\s+/g,'_')}.pdf`);
   showToast('🧾 Invoice downloaded!');
+}
+
+/* ══════════════════════════════
+   BACKUP & RESTORE
+══════════════════════════════ */
+function backupData(){
+  // Package all data into a JSON file and download it
+  const backup = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    sites: sites
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type: 'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'SammiReddy_Finance_Backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('💾 Backup downloaded!');
+}
+
+function restoreData(input){
+  if(!input.files||!input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const backup = JSON.parse(e.target.result);
+      if(!backup.sites||!Array.isArray(backup.sites)){
+        alert('Invalid backup file. Please use a file exported from this app.');
+        return;
+      }
+      if(!confirm(`This will REPLACE all your current data with the backup from ${backup.exportedAt ? new Date(backup.exportedAt).toLocaleDateString() : 'unknown date'}. Are you sure?`)) return;
+      
+      sites = backup.sites;
+      nextSiteId = sites.length > 0 ? Math.max(...sites.map(s=>s.id))+1 : 1;
+      activeSiteId = sites.length > 0 ? sites[0].id : null;
+      saveAll();
+      showView('summary');
+      showToast('✅ Data restored successfully!');
+    } catch(err) {
+      alert('Could not read backup file. Make sure it is a valid backup JSON file.');
+    }
+  };
+  reader.readAsText(input.files[0]);
+  // Reset input so same file can be selected again
+  input.value = '';
 }
 
 /* ══════════════════════════════
